@@ -1,0 +1,76 @@
+name: Make videos for YouTube (batch)
+
+# Run this by hand (Actions → "Make videos for YouTube" → Run workflow).
+# It makes every video in the date range with the Telugu voice and gives you
+# one download with the MP4s plus youtube_schedule.csv (titles + descriptions)
+# so you can schedule them in YouTube Studio.
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_date:
+        description: "First date (YYYY-MM-DD)"
+        required: true
+        default: "2026-11-11"
+      to_date:
+        description: "Last date (YYYY-MM-DD)"
+        required: true
+        default: "2026-11-24"
+
+jobs:
+  batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      HYPERFRAMES_BROWSER_PATH: /usr/bin/google-chrome
+      HYPERFRAMES_NO_TELEMETRY: "1"
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install tools
+        env:
+          VOICE_KEY: ${{ secrets.VOICE_KEY }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q -r requirements.txt
+          if [ -n "$VOICE_KEY" ] && [ -n "$HF_TOKEN" ]; then
+            pip install -q torch --index-url https://download.pytorch.org/whl/cpu
+            pip install -q soundfile "transformers>=4.49" git+https://github.com/ai4bharat/IndicF5.git
+          fi
+
+      - name: Unlock your voice sample
+        env:
+          VOICE_KEY: ${{ secrets.VOICE_KEY }}
+        run: |
+          if [ -n "$VOICE_KEY" ] && [ -f content/voice/reference.wav.gpg ]; then
+            gpg --batch --quiet --pinentry-mode loopback --passphrase "$VOICE_KEY" \
+                -d content/voice/reference.wav.gpg > "$RUNNER_TEMP/reference.wav"
+            echo "SIPP_VOICE_REF=$RUNNER_TEMP/reference.wav" >> "$GITHUB_ENV"
+            echo "Voice sample unlocked"
+          else
+            echo "No VOICE_KEY secret: using the Microsoft Telugu voice"
+          fi
+
+      - name: Cache the voice model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: indicf5-v1
+      - name: Make the videos
+        run: python scripts/make_video.py --all --from-date ${{ inputs.from_date }} --to-date ${{ inputs.to_date }}
+      - name: Build the YouTube schedule sheet
+        run: python scripts/youtube_sheet.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youtube-videos-${{ inputs.from_date }}-to-${{ inputs.to_date }}
+          path: |
+            out/*.mp4
+            out/youtube_schedule.csv
+          retention-days: 60
