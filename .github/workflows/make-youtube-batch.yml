@@ -43,7 +43,7 @@ jobs:
           pip install -q -r requirements.txt
           if [ -n "$VOICE_KEY" ] && [ -n "$HF_TOKEN" ]; then
             # torch and torchaudio must be the same CPU build, or the cloned voice can't load
-            printf 'torch==2.6.0\ntorchaudio==2.6.0\n' > /tmp/torch-pins.txt
+            printf 'torch==2.6.0\ntorchaudio==2.6.0\npyarrow<17\n' > /tmp/torch-pins.txt
             pip install -q torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
             pip install -q -c /tmp/torch-pins.txt --extra-index-url https://download.pytorch.org/whl/cpu \
               soundfile "transformers>=4.49,<4.57" git+https://github.com/ai4bharat/IndicF5.git
