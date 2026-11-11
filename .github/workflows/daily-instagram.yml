@@ -27,6 +27,7 @@ jobs:
     env:
       HYPERFRAMES_BROWSER_PATH: /usr/bin/google-chrome
       HYPERFRAMES_NO_TELEMETRY: "1"
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
       PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:

@@ -50,21 +50,21 @@ Repository → **Settings** → **Secrets and variables** → **Actions** → **
 |---|---|
 | `IG_USER_ID` | the Instagram user ID from Step 2 |
 | `IG_ACCESS_TOKEN` | the access token from Step 2 |
-| `PEXELS_API_KEY` | your free Pexels key, see Step 4b (photos) |
+| `PIXABAY_API_KEY` | your free Pixabay key, see Step 4b (video clips + photos) |
 | `HF_TOKEN` | your Hugging Face **Read** token (after accepting the IndicF5 terms) |
 | `VOICE_KEY` | the voice key Claude gave you (unlocks your encrypted voice sample) |
 
 Then **Settings → Actions → General → Workflow permissions → Read and write** → Save.
 
-### Step 4b — Free photos (Pexels, 2 minutes)
-1. Sign up free at **pexels.com** → open **pexels.com/api** → **Your API Key** → copy it.
-2. Add it as the `PEXELS_API_KEY` secret.
+### Step 4b — Free video clips and photos (Pixabay, 2 minutes)
+1. Sign up free at **pixabay.com** → open **pixabay.com/api/docs** → your key is shown under **Parameters → key**.
+2. Add it as the `PIXABAY_API_KEY` secret.
 
-Each scene's centre card then shows a real photo (drinks, bars, pours…) picked with the
-day's `broll:` search words. Pexels photos are free to use with no credit required.
-Without the key, the cards show animated icons instead.
-**Your own photos:** put them in `content/photos/<date>/` (e.g. `content/photos/2026-11-21/my-drink.jpg`);
-they are used first, in name order.
+Each scene's centre card then plays a short, muted Pixabay **video clip** found with the day's
+`broll:` search words. If no good clip turns up, it uses a Pixabay photo instead; without any key,
+the cards show animated icons. Pixabay content is free to use, even commercially, with no credit
+required (avoid clips with clear brand logos). A `PEXELS_API_KEY` also works for photos.
+**Your own clips or photos:** put .mp4/.mov/.jpg/.png files in `content/photos/<date>/`; they are used first.
 
 ### Step 4c — Your own voice (voice cloning, free)
 Videos are spoken in **your voice** using AI4Bharat **IndicF5** (MIT license, supports Telugu).

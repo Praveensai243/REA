@@ -160,8 +160,16 @@ def _card_motion(sid, dur, first=False):
 
 def card(sid, sc, dur, kind, photo=None, icon=None, v_start=0.3, v_len=2.0, first=False):
     inner, tw = [], []
-    if photo:
-        inner.append(f'<img id="{sid}-ph" class="photo" src="{photo}" alt="">')
+    if isinstance(photo, dict) and photo.get("kind") == "video":
+        rate = ""
+        if photo["dur"] < dur:   # slow a short clip down so it covers the whole scene
+            rate = f' data-playback-rate="{max(0.5, photo["dur"] / dur - 0.01):.3f}"'
+        inner.append(f'<video id="{sid}-ph" class="photo clip" src="{photo["src"]}" muted playsinline '
+                     f'data-start="0" data-duration="{dur:g}" data-media-start="0"{rate}></video>')
+        inner.append('<div class="shade"></div>')
+    elif photo:
+        src = photo["src"] if isinstance(photo, dict) else photo
+        inner.append(f'<img id="{sid}-ph" class="photo" src="{src}" alt="">')
         inner.append('<div class="shade"></div>')
         tw.append((f"#{sid}-ph", "{scale:1.02,xPercent:-2}", f"{{scale:1.16,xPercent:2,duration:{dur:.2f},ease:'none'}}", 0))
     if sc.get("anim") == "three_glasses":

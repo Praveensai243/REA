@@ -22,7 +22,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 from audio import Soundtrack  # noqa: E402
 from icons import plan_icons, render_icon  # noqa: E402
-from photos import get_photos  # noqa: E402
+from photos import get_media  # noqa: E402
 import style  # noqa: E402
 import mascot  # noqa: E402
 
@@ -320,8 +320,10 @@ def build(entry, voice=True, render=True, check=False, broll=True):
     day_icon = icon_plan[0]
     card_icons = [ic or day_icon for ic in icon_plan]
     n_cards = sum(1 for sc in scenes[:-1] if not sc.get("list") and not sc.get("anim")) or 1
-    photo_list = get_photos(entry, work, n_cards) if broll else []
-    print(f"  photos: {len(photo_list)}" + ("" if photo_list else " (cards show animated icons)"))
+    photo_list = get_media(entry, work, n_cards) if broll else []
+    kinds = [m["kind"] for m in photo_list]
+    print(f"  card media: {kinds.count('video')} video clips, {kinds.count('photo')} photos"
+          + ("" if photo_list else " (cards show animated icons)"))
     hosts, t, pi = [], 0.0, 0
     mascot_events = []
     for i, (sc, d) in enumerate(zip(scenes, durs)):
