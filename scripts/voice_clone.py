@@ -29,7 +29,8 @@ def _model():
         from transformers import AutoModel
         print("  loading IndicF5 (first run downloads ~1.4 GB, then it's cached)…")
         _MODEL = AutoModel.from_pretrained("ai4bharat/IndicF5", trust_remote_code=True,
-                                           token=os.environ.get("HF_TOKEN"))
+                                           token=os.environ.get("HF_TOKEN"),
+                                           low_cpu_mem_usage=False)  # load real weights, not empty "meta" ones
     return _MODEL
 
 

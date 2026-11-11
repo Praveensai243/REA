@@ -46,7 +46,7 @@ jobs:
             printf 'torch==2.6.0\ntorchaudio==2.6.0\npyarrow<17\n' > /tmp/torch-pins.txt
             pip install -q torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
             pip install -q -c /tmp/torch-pins.txt --extra-index-url https://download.pytorch.org/whl/cpu \
-              soundfile "transformers>=4.49,<4.57" git+https://github.com/ai4bharat/IndicF5.git
+              soundfile "transformers==4.49.0" git+https://github.com/ai4bharat/IndicF5.git
           fi
 
       - name: Unlock your voice sample
