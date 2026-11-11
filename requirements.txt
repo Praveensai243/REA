@@ -1,0 +1,6 @@
+edge-tts>=7.0
+pyyaml>=6.0
+numpy>=1.26
+scipy>=1.11
+pyloudnorm>=0.1.1
+requests>=2.31

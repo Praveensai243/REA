@@ -1,0 +1,153 @@
+name: Daily Instagram Reel
+
+on:
+  schedule:
+    - cron: "15 13 * * *"      # every day ~6:45 PM India time (GitHub may start a few minutes late)
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Date to post (YYYY-MM-DD). Leave blank for today (India time)."
+        required: false
+      dry_run:
+        description: "Make the video but do NOT post it"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-instagram
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HYPERFRAMES_BROWSER_PATH: /usr/bin/google-chrome
+      HYPERFRAMES_NO_TELEMETRY: "1"
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick the date
+        id: day
+        run: |
+          D="${{ inputs.date }}"
+          [ -z "$D" ] && D=$(TZ=Asia/Kolkata date +%F)
+          echo "date=$D" >> "$GITHUB_OUTPUT"
+          echo "Posting date: $D"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Is there a video planned and not yet posted?
+        id: gate
+        run: |
+          pip install -q pyyaml
+          D=${{ steps.day.outputs.date }}
+          if [ -f "posted/$D.json" ]; then echo "Already posted $D"; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if python -c "import yaml,sys; c=yaml.safe_load(open('content/calendar.yaml')); sys.exit(0 if any(str(e['date'])=='$D' for e in c) else 1)"; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Nothing planned for $D"; echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.go == 'true'
+        with:
+          node-version: "22"
+
+      - name: Install tools
+        env:
+          VOICE_KEY: ${{ secrets.VOICE_KEY }}
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q -r requirements.txt
+          if [ -n "$VOICE_KEY" ] && [ -n "$HF_TOKEN" ]; then
+            pip install -q torch --index-url https://download.pytorch.org/whl/cpu
+            pip install -q soundfile "transformers>=4.49" git+https://github.com/ai4bharat/IndicF5.git
+          fi
+
+      - name: Unlock your voice sample
+        if: steps.gate.outputs.go == 'true'
+        env:
+          VOICE_KEY: ${{ secrets.VOICE_KEY }}
+        run: |
+          if [ -n "$VOICE_KEY" ] && [ -f content/voice/reference.wav.gpg ]; then
+            gpg --batch --quiet --pinentry-mode loopback --passphrase "$VOICE_KEY" \
+                -d content/voice/reference.wav.gpg > "$RUNNER_TEMP/reference.wav"
+            echo "SIPP_VOICE_REF=$RUNNER_TEMP/reference.wav" >> "$GITHUB_ENV"
+            echo "Voice sample unlocked"
+          else
+            echo "No VOICE_KEY secret: using the Microsoft Telugu voice"
+          fi
+
+      - name: Cache the voice model
+        if: steps.gate.outputs.go == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: indicf5-v1
+
+      - name: Make today's video (Telugu voice + music)
+        if: steps.gate.outputs.go == 'true'
+        run: python scripts/make_video.py --date ${{ steps.day.outputs.date }}
+
+      - name: Keep a copy of the video
+        if: steps.gate.outputs.go == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-${{ steps.day.outputs.date }}
+          path: |
+            out/${{ steps.day.outputs.date }}.mp4
+            out/${{ steps.day.outputs.date }}.json
+          retention-days: 60
+
+      - name: Put the video at a public link (videos branch)
+        if: steps.gate.outputs.go == 'true' && !inputs.dry_run
+        id: link
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          D=${{ steps.day.outputs.date }}
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          rm -rf /tmp/vb
+          if git ls-remote --exit-code --heads "$REMOTE" videos >/dev/null 2>&1; then
+            git clone -q --depth 1 --branch videos "$REMOTE" /tmp/vb
+          else
+            mkdir /tmp/vb && cd /tmp/vb && git init -q -b videos && git remote add origin "$REMOTE" && cd -
+          fi
+          mkdir -p /tmp/vb/videos && cp "out/$D.mp4" /tmp/vb/videos/
+          cd /tmp/vb
+          git config user.name "sipp-smart-bot" && git config user.email "actions@users.noreply.github.com"
+          git add videos && git commit -q -m "video $D" && git push -q origin videos
+          SHA=$(git rev-parse HEAD)
+          URL1="https://cdn.jsdelivr.net/gh/${GITHUB_REPOSITORY}@${SHA}/videos/$D.mp4"
+          URL2="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${SHA}/videos/$D.mp4"
+          curl -s -o /dev/null -w "jsdelivr warm-up: %{http_code}\n" "$URL1" || true
+          echo "urls=$URL1,$URL2" >> "$GITHUB_OUTPUT"
+
+      - name: Post to Instagram
+        if: steps.gate.outputs.go == 'true'
+        env:
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/post_instagram.py --date ${{ steps.day.outputs.date }} --dry-run
+          else
+            python scripts/post_instagram.py --date ${{ steps.day.outputs.date }} --video-url "${{ steps.link.outputs.urls }}"
+          fi
+
+      - name: Remember that today is posted
+        if: steps.gate.outputs.go == 'true' && !inputs.dry_run
+        run: |
+          git config user.name "sipp-smart-bot" && git config user.email "actions@users.noreply.github.com"
+          git add posted/
+          git commit -q -m "posted ${{ steps.day.outputs.date }}" || exit 0
+          for i in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done
