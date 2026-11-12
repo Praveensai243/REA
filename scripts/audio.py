@@ -343,6 +343,13 @@ class Soundtrack:
              "-ac", "1", "-ar", str(SR), "-f", "s16le", "-"],
             check=True, capture_output=True).stdout
         sig = np.frombuffer(raw, dtype=np.int16).astype(np.float64) / 32768
+        # bring every clip to the same speaking level (cloned voices can come out quiet)
+        frames = sig[: len(sig) // 480 * 480].reshape(-1, 480)
+        rms = np.sqrt((frames ** 2).mean(axis=1)) if len(frames) else np.array([0.0])
+        speech = rms[rms > rms.max() * 0.1] if rms.max() > 0 else rms
+        level = float(np.sqrt((speech ** 2).mean())) if len(speech) else 0.0
+        if level > 1e-5:
+            sig = sig * min(8.0, 10 ** (-16 / 20) / level)    # speech at about -16 dBFS
         i = int(at * SR)
         j = min(self.n, i + len(sig))
         if i < self.n:
@@ -386,9 +393,9 @@ class Soundtrack:
             att, rel = int(0.03 * SR), int(0.35 * SR)
             env = signal.lfilter([1.0 / att], [1, -(1 - 1.0 / att)], env)          # fast follower
             env = signal.lfilter([1.0 / rel], [1, -(1 - 1.0 / rel)], env)
-            duck = 1 - 0.68 * np.clip(env * 30, 0, 1)                              # ~ -10 dB under speech
+            duck = 1 - 0.75 * np.clip(env * 30, 0, 1)                              # ~ -12 dB under speech
             beds = beds * duck[:, None]
-            mix = beds * 0.55 + self.fx.x * 0.75 + np.repeat(self.voice[:, None], 2, axis=1) * 1.0
+            mix = beds * 0.42 + self.fx.x * 0.5 + np.repeat(self.voice[:, None], 2, axis=1) * 1.0
         else:
             mix = beds + self.fx.x * 0.8
 
