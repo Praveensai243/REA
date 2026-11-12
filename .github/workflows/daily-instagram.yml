@@ -86,6 +86,11 @@ jobs:
             gpg --batch --quiet --pinentry-mode loopback --passphrase "$VOICE_KEY" \
                 -d content/voice/reference.wav.gpg > "$RUNNER_TEMP/reference.wav"
             echo "SIPP_VOICE_REF=$RUNNER_TEMP/reference.wav" >> "$GITHUB_ENV"
+            if [ -f content/voice/cheers.wav.gpg ]; then
+              gpg --batch --quiet --pinentry-mode loopback --passphrase "$VOICE_KEY" \
+                  -d content/voice/cheers.wav.gpg > "$RUNNER_TEMP/cheers.wav"
+              echo "SIPP_CHEERS=$RUNNER_TEMP/cheers.wav" >> "$GITHUB_ENV"
+            fi
             echo "Voice sample unlocked"
           else
             echo "No VOICE_KEY secret: using the Microsoft Telugu voice"

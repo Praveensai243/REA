@@ -296,6 +296,14 @@ def build(entry, voice=True, render=True, check=False, broll=True):
         floor = 3.8 if i == len(scenes) - 1 else 2.4
         durs.append(round(max(floor, d), 2))
     durs[-1] = round(durs[-1] + 1.6, 2)  # hold the ending so the last line can be read
+    # sign off every video with your real "Cheers!" (recorded, not cloned)
+    cheers = os.environ.get("SIPP_CHEERS") if voices else None
+    cheers_at = None
+    if cheers and Path(cheers).exists():
+        cd = probe_duration(cheers)
+        last_voice_end = 0.3 + probe_duration(voices[-1])
+        cheers_at = round(last_voice_end + 0.35, 2)
+        durs[-1] = round(max(durs[-1], cheers_at + cd + 0.9), 2)
     total = round(sum(durs), 2)
 
     # soundtrack
@@ -311,6 +319,9 @@ def build(entry, voice=True, render=True, check=False, broll=True):
             st.pop(t + 0.5)
         if voices:
             st.add_voice(voices[i], t + (0.75 if sc.get("stamp") else 0.3))
+        if cheers_at is not None and i == len(scenes) - 1:
+            st.add_voice(cheers, t + cheers_at)
+            print("  ending: your 'Cheers!'")
         t += d
     st.write(work / "assets" / "soundtrack.wav")
 
