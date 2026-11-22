@@ -2,7 +2,7 @@
 
 Needs two secrets (set in GitHub → Settings → Secrets → Actions):
   IG_USER_ID       your Instagram professional account ID
-  IG_ACCESS_TOKEN  a long-lived Instagram User access token (lasts 60 days)
+  IG_ACCESS_TOKEN  a long-lived token: Instagram Login (IGAA…) or Facebook Login (EAA…)
 
     python scripts/post_instagram.py --date 2026-11-11 [--dry-run]
 
@@ -23,6 +23,14 @@ import requests
 REPO = Path(__file__).resolve().parent.parent
 API_VERSION = os.environ.get("IG_API_VERSION", "v26.0")
 GRAPH = f"https://graph.instagram.com/{API_VERSION}"
+
+
+def graph_for(token):
+    """IGAA… tokens (Instagram Login) use graph.instagram.com; EAA… tokens
+    (Facebook Login, Instagram account linked to a Facebook Page) use graph.facebook.com."""
+    if token.strip().startswith("EAA"):
+        return f"https://graph.facebook.com/{API_VERSION}"
+    return GRAPH
 
 
 def fail(msg, resp=None):
@@ -60,7 +68,7 @@ def post(day, video_urls, dry_run=False):
     container = None
     for url in [u for u in video_urls if u]:
         print(f"trying video link: {url}")
-        r = requests.post(f"{GRAPH}/{user_id}/media", data={
+        r = requests.post(f"{graph_for(token)}/{user_id}/media", data={
             "media_type": "REELS", "video_url": url, "caption": caption,
             "share_to_feed": "true", "access_token": token}, timeout=60)
         if r.status_code != 200:
@@ -69,7 +77,7 @@ def post(day, video_urls, dry_run=False):
         status = None
         for _ in range(30):  # up to ~10 minutes
             time.sleep(20)
-            r = requests.get(f"{GRAPH}/{cid}", params={"fields": "status_code,status", "access_token": token}, timeout=60)
+            r = requests.get(f"{graph_for(token)}/{cid}", params={"fields": "status_code,status", "access_token": token}, timeout=60)
             status = r.json().get("status_code")
             print(f"  status: {status}")
             if status in ("FINISHED", "ERROR", "EXPIRED"):
@@ -82,14 +90,14 @@ def post(day, video_urls, dry_run=False):
         fail("Instagram could not process the video from any link.")
 
     # 4) publish
-    r = requests.post(f"{GRAPH}/{user_id}/media_publish",
+    r = requests.post(f"{graph_for(token)}/{user_id}/media_publish",
                       data={"creation_id": container, "access_token": token}, timeout=60)
     if r.status_code != 200:
         fail("Publish failed.", r)
     media_id = r.json()["id"]
     link = None
     try:
-        link = requests.get(f"{GRAPH}/{media_id}", params={"fields": "permalink", "access_token": token},
+        link = requests.get(f"{graph_for(token)}/{media_id}", params={"fields": "permalink", "access_token": token},
                             timeout=60).json().get("permalink")
     except Exception:
         pass

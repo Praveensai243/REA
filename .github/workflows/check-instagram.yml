@@ -5,21 +5,49 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Ask Instagram who this token belongs to
+      - name: Check the token and account
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
         run: |
-          [ -n "$IG_ACCESS_TOKEN" ] || { echo "❌ IG_ACCESS_TOKEN secret is missing"; exit 1; }
-          [ -n "$IG_USER_ID" ] || { echo "❌ IG_USER_ID secret is missing"; exit 1; }
-          r=$(curl -s "https://graph.instagram.com/v26.0/me?fields=user_id,username,account_type&access_token=$IG_ACCESS_TOKEN")
-          echo "$r" | python3 -c '
-          import json,os,sys
-          d=json.load(sys.stdin)
-          if "error" in d: print("❌ Instagram rejected the token:", d["error"].get("message")); sys.exit(1)
-          print("✅ token works for @%s (%s)" % (d.get("username"), d.get("account_type")))
-          ids={str(d.get("user_id")), str(d.get("id"))}
-          want=os.environ["IG_USER_ID"].strip()
-          if want in ids: print("✅ IG_USER_ID matches")
-          else: print("❌ IG_USER_ID does not match this account. Use:", d.get("user_id")); sys.exit(1)
-          '
+          python3 - <<'PY'
+          import json, os, sys, time, urllib.parse, urllib.request
+          tok = (os.environ.get("IG_ACCESS_TOKEN") or "").strip()
+          uid = (os.environ.get("IG_USER_ID") or "").strip()
+          if not tok: sys.exit("❌ IG_ACCESS_TOKEN secret is missing")
+          if not uid: sys.exit("❌ IG_USER_ID secret is missing")
+          def get(base, path, **q):
+              q["access_token"] = tok
+              try:
+                  return json.load(urllib.request.urlopen(f"{base}/{path}?{urllib.parse.urlencode(q)}", timeout=30))
+              except urllib.error.HTTPError as e:
+                  return json.load(e)
+          ok = True
+          print("token type:", "Facebook Login (EAA)" if tok.startswith("EAA") else "Instagram Login (IGAA)" if tok.startswith("IG") else "unknown start: " + tok[:3])
+          if tok.startswith("EAA"):
+              G = "https://graph.facebook.com/v26.0"
+              d = get(G, "debug_token", input_token=tok).get("data", {})
+              if not d.get("is_valid"):
+                  sys.exit("❌ token not valid: " + json.dumps(d.get("error", d)))
+              exp = d.get("expires_at", 0)
+              print("expires:", "never" if not exp else time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(exp)))
+              if exp and exp - time.time() < 3 * 86400:
+                  print("❌ expires within 3 days: this is a short-lived token, need a long-lived (60-day) one"); ok = False
+              scopes = set(d.get("scopes", []))
+              print("permissions:", ", ".join(sorted(scopes)))
+              for need in ("instagram_basic", "instagram_content_publish"):
+                  if need not in scopes:
+                      print("❌ missing permission:", need); ok = False
+              acc = get(G, "me/accounts", fields="name,instagram_business_account{id,username}")
+              for pg in acc.get("data", []):
+                  ig = pg.get("instagram_business_account")
+                  print(f"  Facebook Page '{pg.get('name')}' → Instagram", f"@{ig['username']} id {ig['id']}" if ig else "(none linked)")
+          else:
+              G = "https://graph.instagram.com/v26.0"
+          me = get(G, uid, fields="username")
+          if "error" in me:
+              print("❌ IG_USER_ID not reachable with this token:", me["error"].get("message")); ok = False
+          else:
+              print(f"✅ IG_USER_ID {uid} is @{me.get('username')}")
+          sys.exit(0 if ok else 1)
+          PY
