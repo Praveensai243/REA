@@ -38,9 +38,10 @@ jobs:
                   print("❌ expires within 3 days: this is a short-lived token, need a long-lived (60-day) one"); ok = False
               scopes = set(d.get("scopes", []))
               print("permissions:", ", ".join(sorted(scopes)))
-              for need in ("instagram_basic", "instagram_content_publish"):
-                  if need not in scopes:
-                      print("❌ missing permission:", need); ok = False
+              if scopes:
+                  for need in ("instagram_basic", "instagram_content_publish"):
+                      if need not in scopes:
+                          print("❌ missing permission:", need); ok = False
               acc = get(G, "me/accounts", fields="name,instagram_business_account{id,username}")
               for pg in acc.get("data", []):
                   ig = pg.get("instagram_business_account")
@@ -52,5 +53,10 @@ jobs:
               print("❌ IG_USER_ID not reachable with this token:", me["error"].get("message")); ok = False
           else:
               print(f"✅ IG_USER_ID {uid} is @{me.get('username')}")
+              lim = get(G, f"{uid}/content_publishing_limit", fields="quota_usage,config")
+              if "error" in lim:
+                  print("❌ no permission to post:", lim["error"].get("message")); ok = False
+              else:
+                  print("✅ allowed to post (posts used in last 24h:", (lim.get("data") or [{}])[0].get("quota_usage"), ")")
           sys.exit(0 if ok else 1)
           PY
