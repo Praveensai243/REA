@@ -19,18 +19,20 @@ CACHE = REPO / ".cache" / "photos"
 PEXELS = "https://api.pexels.com/v1/search"
 
 
-def _square(src, dst):
+def _square(src, dst, size=(1080, 1080)):
+    w, h = size
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-vf",
-                    "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080", "-q:v", "3", str(dst)],
+                    f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}", "-q:v", "3", str(dst)],
                    check=True)
 
 
 VIDEO_EXT = (".mp4", ".mov", ".m4v", ".webm")
 
 
-def _square_video(src, dst, max_len=12):
+def _square_video(src, dst, max_len=12, size=(1080, 1080)):
+    w, h = size
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-t", str(max_len), "-an",
-                    "-vf", "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080,setsar=1,fps=30",
+                    "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,fps=30",
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "24", "-pix_fmt", "yuv420p",
                     "-movflags", "+faststart", str(dst)], check=True)
     out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(dst)],
@@ -152,7 +154,7 @@ def _pixabay_videos(day, queries, want):
                 continue
             seen.add(h["id"])
             files = h.get("videos", {})
-            pick = next((files[k] for k in ("medium", "large", "small") if files.get(k, {}).get("url")
+            pick = next((files[k] for k in ("large", "medium", "small") if files.get(k, {}).get("url")
                          and min(files[k].get("width", 0), files[k].get("height", 0)) >= 720), None)
             if not pick:
                 continue
@@ -168,13 +170,18 @@ def _pixabay_videos(day, queries, want):
     return out
 
 
-def get_media(entry, work, want):
+EXTRA = {"cocktail": ["cocktail bar", "bartender", "cheers drinks"], "edu": ["whiskey glass", "bar night", "pouring drink"]}
+
+
+def get_media(entry, work, want, size=(1080, 1080)):
     """Up to `want` card-ready items: {"src": project path, "kind": "video"|"photo", "dur": seconds}."""
     day = str(entry["date"])
     queries = entry.get("broll") or []
     raw = [{"path": p, "credit": "own"} for p in _own(day)][:want]
     if len(raw) < want:
         raw += _pixabay_videos(day, queries, want - len(raw))
+    if len(raw) < want:   # top up with general bar / drink footage
+        raw += _pixabay_videos(day, EXTRA.get(entry.get("kind"), EXTRA["edu"]), want - len(raw))
     if len(raw) < want:
         raw += _pixabay(day, queries, want - len(raw))
     if len(raw) < want:
@@ -185,12 +192,12 @@ def get_media(entry, work, want):
         try:
             if src.suffix.lower() in VIDEO_EXT:
                 dst = work / "assets" / f"clip_{n}.mp4"
-                d = _square_video(src, dst)
+                d = _square_video(src, dst, size=size)
                 if d >= 2:
                     out.append({"src": f"assets/clip_{n}.mp4", "kind": "video", "dur": d})
             else:
                 dst = work / "assets" / f"photo_{n}.jpg"
-                _square(src, dst)
+                _square(src, dst, size)
                 out.append({"src": f"assets/photo_{n}.jpg", "kind": "photo", "dur": 0})
         except subprocess.CalledProcessError as e:
             print(f"  could not use {src}: {e}")

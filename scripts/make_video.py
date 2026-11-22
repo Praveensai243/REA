@@ -23,7 +23,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from audio import Soundtrack  # noqa: E402
 from icons import plan_icons, render_icon  # noqa: E402
 from photos import get_media  # noqa: E402
-import paper as style  # noqa: E402   (paper look; the old dark look is style.py)
+STYLE = os.environ.get("SIPP_STYLE", "real")      # real | paper | dark
+style = __import__({"real": "real", "paper": "paper", "dark": "style"}[STYLE])  # noqa: E402
 import pixel_me  # noqa: E402
 import mascot  # noqa: E402
 
@@ -223,7 +224,21 @@ def watermark_html(work, total):
                     f'style="height:{LOGO_HEIGHT}px;width:auto;display:block"></div>')
     return (f'      <div id="watermark" class="clip" data-start="0" data-duration="{total:g}" data-track-index="17" '
             f'data-layout-ignore style="{style};font-family:Anek,sans-serif;font-weight:800;font-size:34px;'
-            f'letter-spacing:0.04em;color:rgba(20,20,20,0.55);">@sipp_smart</div>')
+            f'letter-spacing:0.04em;color:{'rgba(20,20,20,0.55)' if STYLE == 'paper' else 'rgba(255,255,255,0.75)'};">@sipp_smart</div>')
+
+
+def shrink(path, limit_mb=45):
+    """Full-screen footage can make big files; GitHub refuses files over 100 MB and
+    Instagram is slower with them. Re-encode (same look) if the file is too big."""
+    mb = path.stat().st_size / 1e6
+    if mb <= limit_mb:
+        return
+    tmp = path.with_suffix(".small.mp4")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(path), "-c:v", "libx264", "-preset", "medium", "-crf", "21",
+                    "-maxrate", "9M", "-bufsize", "18M", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+                    "-movflags", "+faststart", str(tmp)], check=True)
+    tmp.replace(path)
+    print(f"  shrunk video {mb:.0f} MB -> {path.stat().st_size / 1e6:.0f} MB")
 
 
 def probe_duration(path):
@@ -331,14 +346,17 @@ def build(entry, voice=True, render=True, check=False, broll=True):
     icon_plan = plan_icons(scenes[:-1], kind) + [None]
     day_icon = icon_plan[0]
     card_icons = [ic or day_icon for ic in icon_plan]
-    n_cards = sum(1 for sc in scenes[:-1] if not sc.get("list") and not sc.get("anim")) or 1
-    photo_list = get_media(entry, work, n_cards) if broll else []
+    full = STYLE == "real"   # real footage behind every scene, the ending too
+    n_cards = len(scenes) if full else (sum(1 for sc in scenes[:-1] if not sc.get("list") and not sc.get("anim")) or 1)
+    photo_list = get_media(entry, work, n_cards, getattr(style, "MEDIA_SIZE", (1080, 1080))) if broll else []
     kinds = [m["kind"] for m in photo_list]
     print(f"  card media: {kinds.count('video')} video clips, {kinds.count('photo')} photos"
           + ("" if photo_list else " (cards show animated icons)"))
     hosts, t, pi = [], 0.0, 0
     mascot_events, talk_spans = [], []
-    pixel_me.write_frames(day, work / "assets")
+    host = STYLE == "paper"
+    if host:
+        pixel_me.write_frames(day, work / "assets")
     for i, (sc, d) in enumerate(zip(scenes, durs)):
         sid = f"s{i + 1}"
         v_start = 0.75 if sc.get("stamp") else 0.3
@@ -349,10 +367,11 @@ def build(entry, voice=True, render=True, check=False, broll=True):
         if voices:
             talk_spans.append((t + v_start, v_len))
         if i == len(scenes) - 1:
-            card_html, card_tw = style.cta_card(sid, sc, d, kind)
+            photo = photo_list[pi % len(photo_list)] if (full and photo_list) else None
+            card_html, card_tw = style.cta_card(sid, sc, d, kind, photo=photo)
         else:
             photo = None
-            if photo_list and not sc.get("list") and not sc.get("anim"):
+            if photo_list and (full or (not sc.get("list") and not sc.get("anim"))):
                 photo = photo_list[pi % len(photo_list)]
                 pi += 1
             card_html, card_tw = style.card(sid, sc, d, kind, photo=photo, icon=card_icons[i] if not photo else icon_plan[i],
@@ -364,8 +383,9 @@ def build(entry, voice=True, render=True, check=False, broll=True):
                      f'data-width="{W}" data-height="{H}"></div>')
         t += d
     (work / "compositions" / "bg.html").write_text(style.background_doc(kind, total), encoding="utf-8")
-    (work / "compositions" / "me.html").write_text(pixel_me.me_doc(mascot_events, talk_spans, total, style.scene_doc), encoding="utf-8")
-    hosts.append(f'      <div id="me" data-composition-id="me" data-composition-src="compositions/me.html" '
+    if host:
+        (work / "compositions" / "me.html").write_text(pixel_me.me_doc(mascot_events, talk_spans, total, style.scene_doc), encoding="utf-8")
+        hosts.append(f'      <div id="me" data-composition-id="me" data-composition-src="compositions/me.html" '
                  f'data-start="0" data-duration="{total:g}" data-track-index="20" data-width="{W}" data-height="{H}"></div>')
     bg_html = (f'<div id="bg" data-composition-id="bg" data-composition-src="compositions/bg.html" data-start="0" '
                f'data-duration="{total:g}" data-track-index="1" data-width="{W}" data-height="{H}"></div>')
@@ -377,7 +397,7 @@ def build(entry, voice=True, render=True, check=False, broll=True):
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
     <style>
       * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-      html, body {{ margin: 0; width: {W}px; height: {H}px; overflow: hidden; background: #EFECE5; }}
+      html, body {{ margin: 0; width: {W}px; height: {H}px; overflow: hidden; background: {'#EFECE5' if STYLE == 'paper' else '#0B0907'}; }}
       #root {{ width: 100%; height: 100%; position: relative; }}
       {style.FONTS}
     </style>
@@ -406,6 +426,7 @@ def build(entry, voice=True, render=True, check=False, broll=True):
         subprocess.run(HF + ["check"], cwd=work, check=False)
     if render:
         subprocess.run(HF + ["render", "--output", str(out / f"{day}.mp4")], cwd=work, check=True)
+        shrink(out / f"{day}.mp4")
         print(f"✅ {out / f'{day}.mp4'}  ({total}s)")
     return work
 
