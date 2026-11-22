@@ -1,0 +1,25 @@
+name: Check Instagram keys (posts nothing)
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask Instagram who this token belongs to
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+        run: |
+          [ -n "$IG_ACCESS_TOKEN" ] || { echo "❌ IG_ACCESS_TOKEN secret is missing"; exit 1; }
+          [ -n "$IG_USER_ID" ] || { echo "❌ IG_USER_ID secret is missing"; exit 1; }
+          r=$(curl -s "https://graph.instagram.com/v26.0/me?fields=user_id,username,account_type&access_token=$IG_ACCESS_TOKEN")
+          echo "$r" | python3 -c '
+          import json,os,sys
+          d=json.load(sys.stdin)
+          if "error" in d: print("❌ Instagram rejected the token:", d["error"].get("message")); sys.exit(1)
+          print("✅ token works for @%s (%s)" % (d.get("username"), d.get("account_type")))
+          ids={str(d.get("user_id")), str(d.get("id"))}
+          want=os.environ["IG_USER_ID"].strip()
+          if want in ids: print("✅ IG_USER_ID matches")
+          else: print("❌ IG_USER_ID does not match this account. Use:", d.get("user_id")); sys.exit(1)
+          '
