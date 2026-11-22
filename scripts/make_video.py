@@ -23,7 +23,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from audio import Soundtrack  # noqa: E402
 from icons import plan_icons, render_icon  # noqa: E402
 from photos import get_media  # noqa: E402
-import style  # noqa: E402
+import paper as style  # noqa: E402   (paper look; the old dark look is style.py)
+import pixel_me  # noqa: E402
 import mascot  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -213,7 +214,7 @@ def cta_scene(entry):
 def watermark_html(work, total):
     """Logo in the top-right corner on every frame. Uses template/assets/logo.png
     (or logo.svg / logo.jpg) if present, otherwise a text badge."""
-    style = ("position:absolute;top:1414px;left:0;right:0;z-index:60;opacity:0.9;"
+    style = ("position:absolute;top:186px;left:0;right:0;z-index:60;opacity:0.9;"
              "display:flex;align-items:center;justify-content:center")
     for name in ("logo.png", "logo.svg", "logo.webp", "logo.jpg"):
         if (work / "assets" / name).exists():
@@ -222,7 +223,7 @@ def watermark_html(work, total):
                     f'style="height:{LOGO_HEIGHT}px;width:auto;display:block"></div>')
     return (f'      <div id="watermark" class="clip" data-start="0" data-duration="{total:g}" data-track-index="17" '
             f'data-layout-ignore style="{style};font-family:Anek,sans-serif;font-weight:800;font-size:34px;'
-            f'letter-spacing:0.04em;color:rgba(255,247,236,0.75);">@sipp_smart</div>')
+            f'letter-spacing:0.04em;color:rgba(20,20,20,0.55);">@sipp_smart</div>')
 
 
 def probe_duration(path):
@@ -336,15 +337,17 @@ def build(entry, voice=True, render=True, check=False, broll=True):
     print(f"  card media: {kinds.count('video')} video clips, {kinds.count('photo')} photos"
           + ("" if photo_list else " (cards show animated icons)"))
     hosts, t, pi = [], 0.0, 0
-    mascot_events = []
+    mascot_events, talk_spans = [], []
+    pixel_me.write_frames(day, work / "assets")
     for i, (sc, d) in enumerate(zip(scenes, durs)):
         sid = f"s{i + 1}"
         v_start = 0.75 if sc.get("stamp") else 0.3
         v_len = probe_duration(voices[i]) if voices else max(0.8, 0.45 + 0.075 * len(sc["v"]))  # estimate
         cap_html, cap_tw = style.caption(sid, sc["v"], v_start, v_len, style.ACCENT[kind], first=(i == 0))
-        pose = mascot.pose_for(sc, i, i == len(scenes) - 1)
-        if pose:
-            mascot_events.append((t + (0.4 if sc.get("stamp") else 0.35), pose))
+        pose = pixel_me.pose_for(sc, i, i == len(scenes) - 1)
+        mascot_events.append((t + (0.4 if sc.get("stamp") else 0.2), pose))
+        if voices:
+            talk_spans.append((t + v_start, v_len))
         if i == len(scenes) - 1:
             card_html, card_tw = style.cta_card(sid, sc, d, kind)
         else:
@@ -361,8 +364,8 @@ def build(entry, voice=True, render=True, check=False, broll=True):
                      f'data-width="{W}" data-height="{H}"></div>')
         t += d
     (work / "compositions" / "bg.html").write_text(style.background_doc(kind, total), encoding="utf-8")
-    (work / "compositions" / "mascot.html").write_text(mascot.mascot_doc(mascot_events, total, style.scene_doc), encoding="utf-8")
-    hosts.append(f'      <div id="mascot" data-composition-id="mascot" data-composition-src="compositions/mascot.html" '
+    (work / "compositions" / "me.html").write_text(pixel_me.me_doc(mascot_events, talk_spans, total, style.scene_doc), encoding="utf-8")
+    hosts.append(f'      <div id="me" data-composition-id="me" data-composition-src="compositions/me.html" '
                  f'data-start="0" data-duration="{total:g}" data-track-index="20" data-width="{W}" data-height="{H}"></div>')
     bg_html = (f'<div id="bg" data-composition-id="bg" data-composition-src="compositions/bg.html" data-start="0" '
                f'data-duration="{total:g}" data-track-index="1" data-width="{W}" data-height="{H}"></div>')
@@ -374,7 +377,7 @@ def build(entry, voice=True, render=True, check=False, broll=True):
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
     <style>
       * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-      html, body {{ margin: 0; width: {W}px; height: {H}px; overflow: hidden; background: #07040B; }}
+      html, body {{ margin: 0; width: {W}px; height: {H}px; overflow: hidden; background: #EFECE5; }}
       #root {{ width: 100%; height: 100%; position: relative; }}
       {style.FONTS}
     </style>
