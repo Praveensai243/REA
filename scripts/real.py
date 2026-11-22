@@ -5,7 +5,10 @@ stamps, a glass recipe list that ticks off, and a comment prompt at the end.
 
 Same builder API as style.py / paper.py: every builder returns (html, tweens).
 """
+import os
+
 import style
+import three3d
 from icons import render_icon
 from style import FONTS, esc, _vlen, three_glasses  # noqa: F401
 
@@ -14,6 +17,7 @@ GOLD = "#FFC94A"
 ACCENT = {"edu": GOLD, "cocktail": GOLD}
 STAMP = {"MYTH": ("#E5372B", "✗ MYTH"), "FACT": ("#2FA84F", "✓ FACT"), "TIP": ("#F0A21B", "! TIP")}
 MEDIA_SIZE = (1080, 1920)     # make_video asks photos.get_media for portrait footage
+USE_3D = os.environ.get("SIPP_3D", "edu")   # edu = 3D explainers on fact days | all | off
 
 CSS = """
 #root .rfoot{position:absolute;inset:0;overflow:hidden;background:#111;}
@@ -95,9 +99,40 @@ def _footage(sid, photo, dur, icon, first):
     return html + f'<div id="{sid}-fl" class="rflash"></div>', tw
 
 
+def _wants_3d(sc, kind, icon):
+    if USE_3D == "off" or (USE_3D == "edu" and kind != "edu") or sc.get("list"):
+        return None
+    if sc.get("anim") == "three_glasses":
+        return "three"
+    return "hero" if icon in three3d.HERO else None
+
+
+_used = set()   # 3D objects already shown in this video (no repeats: footage instead)
+
+
 def card(sid, sc, dur, kind, photo=None, icon=None, v_start=0.3, v_len=2.0, first=False):
-    f_html, tw = _footage(sid, photo, dur, icon, first)
-    html = f_html
+    if sid == "s1":
+        _used.clear()
+    mode = _wants_3d(sc, kind, icon)
+    if mode == "hero" and icon in _used:
+        mode = None
+    if mode:
+        _used.add(icon if mode == "hero" else "three")
+        bg = ('<div class="rfoot" id="%s-f" style="background:radial-gradient(ellipse at 50%% 45%%,#4A2E16 0%%,#1A100A 55%%,#090605 100%%)"></div>'
+              '<div class="rshade"></div>' % sid)
+        if mode == "three":
+            fills = [round(v_start + v_len * i / 3, 2) for i in range(3)]
+            h3, tw = three3d.scene(sid, "three", dur, fills=fills, fill_dur=min(1.2, v_len / 3),
+                                   labels=["30ml Whisky", "250ml Beer", "100ml Wine"], chips=["≈ 10g alcohol"] * 3)
+        else:
+            h3, tw = three3d.scene(sid, "hero", dur, kind=icon, fills=[round(v_start + 0.3, 2)], fill_dur=min(1.8, max(1.0, v_len * 0.5)))
+        html = bg + h3
+        if not first:
+            tw.append((f"#{sid}-f", "{opacity:0}", "{opacity:1,duration:0.25}", 0))
+        sc = dict(sc, anim=None)   # the 3D scene replaces the flat animation
+    else:
+        f_html, tw = _footage(sid, photo, dur, icon, first)
+        html = f_html
     if sc.get("list"):
         html += _title_html(sid, sc.get("k") or "", None)
         rows = sc["m"].split("\n")

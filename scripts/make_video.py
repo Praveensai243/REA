@@ -374,7 +374,7 @@ def build(entry, voice=True, render=True, check=False, broll=True):
             if photo_list and (full or (not sc.get("list") and not sc.get("anim"))):
                 photo = photo_list[pi % len(photo_list)]
                 pi += 1
-            card_html, card_tw = style.card(sid, sc, d, kind, photo=photo, icon=card_icons[i] if not photo else icon_plan[i],
+            card_html, card_tw = style.card(sid, sc, d, kind, photo=photo, icon=card_icons[i],
                                             v_start=v_start, v_len=v_len, first=(i == 0))
         doc = style.scene_doc(sid, d, cap_html + card_html, card_tw + cap_tw)
         (work / "compositions" / f"{sid}.html").write_text(doc, encoding="utf-8")
@@ -395,6 +395,7 @@ def build(entry, voice=True, render=True, check=False, broll=True):
     <meta charset="UTF-8" />
     <meta name="viewport" content="width={W}, height={H}" />
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <script src="assets/lib/three.min.js"></script>
     <style>
       * {{ margin: 0; padding: 0; box-sizing: border-box; }}
       html, body {{ margin: 0; width: {W}px; height: {H}px; overflow: hidden; background: {'#EFECE5' if STYLE == 'paper' else '#0B0907'}; }}
