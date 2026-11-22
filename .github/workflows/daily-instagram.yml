@@ -2,7 +2,9 @@ name: Daily Instagram Reel
 
 on:
   schedule:
-    - cron: "15 13 * * *"      # every day ~6:45 PM India time (GitHub may start a few minutes late)
+    # Starts ~75 min early (the voice takes ~45 min), then waits for the posting time.
+    - cron: "15 4 * * 0,6"     # Sat & Sun: start 9:45 AM IST, post 11:00 AM IST
+    - cron: "15 10 * * 1-5"    # Mon-Fri: start 3:45 PM IST, post 5:00 PM IST
   workflow_dispatch:
     inputs:
       date:
@@ -23,7 +25,7 @@ concurrency:
 jobs:
   post:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       HYPERFRAMES_BROWSER_PATH: /usr/bin/google-chrome
       HYPERFRAMES_NO_TELEMETRY: "1"
@@ -140,6 +142,20 @@ jobs:
           URL2="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${SHA}/videos/$D.mp4"
           curl -s -o /dev/null -w "jsdelivr warm-up: %{http_code}\n" "$URL1" || true
           echo "urls=$URL1,$URL2" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the posting time (11 AM IST weekends, 5 PM IST weekdays)
+        if: steps.gate.outputs.go == 'true' && github.event_name == 'schedule' && !inputs.dry_run
+        run: |
+          dow=$(TZ=Asia/Kolkata date +%u)              # 6 = Sat, 7 = Sun
+          if [ "$dow" -ge 6 ]; then at="11:00"; else at="17:00"; fi
+          target=$(TZ=Asia/Kolkata date -d "today $at" +%s)
+          now=$(date +%s)
+          if [ "$now" -lt "$target" ]; then
+            echo "Video ready early; waiting $(( (target-now)/60 )) min until $at IST"
+            sleep $(( target - now ))
+          else
+            echo "Past $at IST already; posting now"
+          fi
 
       - name: Post to Instagram
         if: steps.gate.outputs.go == 'true'
