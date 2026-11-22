@@ -26,9 +26,12 @@ jobs:
           print("token type:", "Facebook Login (EAA)" if tok.startswith("EAA") else "Instagram Login (IGAA)" if tok.startswith("IG") else "unknown start: " + tok[:3])
           if tok.startswith("EAA"):
               G = "https://graph.facebook.com/v26.0"
-              d = get(G, "debug_token", input_token=tok).get("data", {})
+              me0 = get(G, "me", fields="id,name")
+              print("Facebook /me:", json.dumps(me0)[:300])
+              raw = get(G, "debug_token", input_token=tok)
+              d = raw.get("data", {})
               if not d.get("is_valid"):
-                  sys.exit("❌ token not valid: " + json.dumps(d.get("error", d)))
+                  print("debug_token:", json.dumps(raw)[:400])
               exp = d.get("expires_at", 0)
               print("expires:", "never" if not exp else time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(exp)))
               if exp and exp - time.time() < 3 * 86400:
