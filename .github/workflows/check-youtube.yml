@@ -1,0 +1,61 @@
+name: Check YouTube keys (uploads nothing)
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Which Google secrets are set, and do they work?
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
+          GOOGLE_CLIENT_SECRET_JSON: ${{ secrets.GOOGLE_CLIENT_SECRET_JSON }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.parse, urllib.request
+          names = ["YT_CLIENT_ID","YT_CLIENT_SECRET","YT_REFRESH_TOKEN","YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET",
+                   "YOUTUBE_REFRESH_TOKEN","GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET","GOOGLE_REFRESH_TOKEN",
+                   "GOOGLE_API_KEY","YOUTUBE_API_KEY","CLIENT_ID","CLIENT_SECRET","CLIENT_SECRET_JSON","GOOGLE_CLIENT_SECRET_JSON"]
+          for n in names:
+              v = (os.environ.get(n) or "").strip()
+              if v:
+                  kind = "looks like client ID" if v.endswith(".apps.googleusercontent.com") else \
+                         "looks like client secret" if v.startswith("GOCSPX-") else \
+                         "looks like refresh token" if v.startswith("1//") else \
+                         "looks like API key" if v.startswith("AIza") else \
+                         "JSON file" if v.startswith("{") else "other"
+                  print(f"SET  {n}  ({kind}, {len(v)} chars)")
+          pick = lambda *ks: next((os.environ[k].strip() for k in ks if (os.environ.get(k) or "").strip()), "")
+          cid = pick("YT_CLIENT_ID","YOUTUBE_CLIENT_ID","GOOGLE_CLIENT_ID","CLIENT_ID")
+          sec = pick("YT_CLIENT_SECRET","YOUTUBE_CLIENT_SECRET","GOOGLE_CLIENT_SECRET","CLIENT_SECRET")
+          rt = pick("YT_REFRESH_TOKEN","YOUTUBE_REFRESH_TOKEN","GOOGLE_REFRESH_TOKEN")
+          if not (cid and sec):
+              print("RESULT: no client ID + secret pair found"); raise SystemExit(0)
+          if not rt:
+              print("RESULT: client ID + secret found, but no refresh token yet (needs one-time sign-in)"); raise SystemExit(0)
+          data = urllib.parse.urlencode({"client_id": cid, "client_secret": sec, "refresh_token": rt, "grant_type": "refresh_token"}).encode()
+          try:
+              tok = json.load(urllib.request.urlopen("https://oauth2.googleapis.com/token", data, timeout=30))
+          except urllib.error.HTTPError as e:
+              print("RESULT: refresh failed:", e.read().decode()[:300]); raise SystemExit(0)
+          print("scopes:", tok.get("scope"))
+          req = urllib.request.Request("https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",
+                                       headers={"Authorization": "Bearer " + tok["access_token"]})
+          try:
+              ch = json.load(urllib.request.urlopen(req, timeout=30))
+              print("RESULT: works for channel:", [i["snippet"]["title"] for i in ch.get("items", [])])
+          except urllib.error.HTTPError as e:
+              print("RESULT: token ok but channel read failed:", e.read().decode()[:300])
+          PY
