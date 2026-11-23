@@ -5,6 +5,10 @@ on:
     # Starts ~75 min early (the voice takes ~45 min), then waits for the posting time.
     - cron: "15 4 * * 0,6"     # Sat & Sun: start 9:45 AM IST, post 11:00 AM IST
     - cron: "15 10 * * 1-5"    # Mon-Fri: start 3:45 PM IST, post 5:00 PM IST
+    # Backups in case GitHub skips a start (a run that finds today already posted stops at once)
+    - cron: "47 4 * * 0,6"
+    - cron: "47 10 * * 1-5"
+    - cron: "37 12 * * *"
   workflow_dispatch:
     inputs:
       date:
