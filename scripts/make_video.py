@@ -227,6 +227,26 @@ def watermark_html(work, total):
             f'letter-spacing:0.04em;color:{'rgba(20,20,20,0.55)' if STYLE == 'paper' else 'rgba(255,255,255,0.75)'};">@sipp_smart</div>')
 
 
+CAPTIONS = os.environ.get("SIPP_CAPTIONS", "en")   # en = Telugu words in English letters | te = Telugu script
+
+
+def caption_text(day, i, n_scenes, spoken):
+    """On-screen caption for scene i: the same words, written in English letters
+    (content/captions_en.txt, keyed MM-DD.<scene> and MM-DD.a for the ending)."""
+    if CAPTIONS != "en":
+        return spoken
+    if not hasattr(caption_text, "table"):
+        caption_text.table = {}
+        f = REPO / "content" / "captions_en.txt"
+        if f.exists():
+            for ln in f.read_text(encoding="utf-8").splitlines():
+                if "|" in ln:
+                    k, v = ln.split("|", 1)
+                    caption_text.table[k.strip()] = v.strip()
+    key = f"{str(day)[5:]}.{'a' if i == n_scenes - 1 else i}"
+    return caption_text.table.get(key, spoken)
+
+
 def shrink(path, limit_mb=45):
     """Full-screen footage can make big files; GitHub refuses files over 100 MB and
     Instagram is slower with them. Re-encode (same look) if the file is too big."""
@@ -361,7 +381,8 @@ def build(entry, voice=True, render=True, check=False, broll=True):
         sid = f"s{i + 1}"
         v_start = 0.75 if sc.get("stamp") else 0.3
         v_len = probe_duration(voices[i]) if voices else max(0.8, 0.45 + 0.075 * len(sc["v"]))  # estimate
-        cap_html, cap_tw = style.caption(sid, sc["v"], v_start, v_len, style.ACCENT[kind], first=(i == 0))
+        cap_text = caption_text(day, i, len(scenes), sc["v"])
+        cap_html, cap_tw = style.caption(sid, cap_text, v_start, v_len, style.ACCENT[kind], first=(i == 0))
         pose = pixel_me.pose_for(sc, i, i == len(scenes) - 1)
         mascot_events.append((t + (0.4 if sc.get("stamp") else 0.2), pose))
         if voices:

@@ -42,6 +42,7 @@ CSS = """
 #root .cap{top:1150px !important;z-index:5;}
 #root .phrase{font-size:74px !important;color:#FFF;text-shadow:0 3px 0 rgba(0,0,0,0.55),0 6px 26px rgba(0,0,0,0.65) !important;}
 #root .acc-te,#root .acc-la{color:%(gold)s !important;}
+#root .acc-la{font-family:"Anek",sans-serif !important;font-style:normal !important;font-weight:800 !important;}
 #root .rflash{position:absolute;inset:0;background:#FFF;opacity:0;pointer-events:none;}
 """.replace("%(gold)s", GOLD).replace("%%", "%")
 
