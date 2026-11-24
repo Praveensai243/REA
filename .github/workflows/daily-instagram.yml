@@ -3,13 +3,11 @@ name: Daily Instagram Reel
 
 on:
   schedule:
-    # Starts ~75 min early (the voice takes ~45 min), then waits for the posting time.
-    - cron: "15 4 * * 0,6"     # Sat & Sun: start 9:45 AM IST, post 11:00 AM IST
-    - cron: "15 10 * * 1-5"    # Mon-Fri: start 3:45 PM IST, post 5:00 PM IST
+    # Starts ~75 min early (the video takes ~40 min), then waits until 12:00 PM IST to post.
+    - cron: "15 5 * * *"       # every day: start 10:45 AM IST, post 12:00 PM IST
     # Backups in case GitHub skips a start (a run that finds today already posted stops at once)
-    - cron: "47 4 * * 0,6"
-    - cron: "47 10 * * 1-5"
-    - cron: "37 12 * * *"
+    - cron: "47 5 * * *"
+    - cron: "37 7 * * *"
   workflow_dispatch:
     inputs:
       date:
@@ -148,11 +146,10 @@ jobs:
           curl -s -o /dev/null -w "jsdelivr warm-up: %{http_code}\n" "$URL1" || true
           echo "urls=$URL1,$URL2" >> "$GITHUB_OUTPUT"
 
-      - name: Wait for the posting time (11 AM IST weekends, 5 PM IST weekdays)
+      - name: Wait for the posting time (12 PM IST)
         if: steps.gate.outputs.go == 'true' && github.event_name == 'schedule' && !inputs.dry_run
         run: |
-          dow=$(TZ=Asia/Kolkata date +%u)              # 6 = Sat, 7 = Sun
-          if [ "$dow" -ge 6 ]; then at="11:00"; else at="17:00"; fi
+          at="12:00"
           target=$(TZ=Asia/Kolkata date -d "today $at" +%s)
           now=$(date +%s)
           if [ "$now" -lt "$target" ]; then

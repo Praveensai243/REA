@@ -1,6 +1,6 @@
 # @sipp_smart — 45 days of Shorts, free and automatic
 
-Every day at **11:00 AM India time on weekends and 5:00 PM on weekdays**, GitHub makes that day's Telugu Short
+Every day at **12:00 PM India time**, GitHub makes that day's Telugu Short
 (voice + music + text) and posts it to Instagram as a Reel. YouTube Shorts are
 made in batches here and you schedule them in YouTube Studio.
 
