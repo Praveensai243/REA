@@ -17,6 +17,10 @@ on:
         description: "Make the video but do NOT post it"
         type: boolean
         default: false
+      wait_for_post_time:
+        description: "Wait until 12 PM IST before posting (used by the daily timer)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -56,6 +60,11 @@ jobs:
           pip install -q pyyaml
           D=${{ steps.day.outputs.date }}
           if [ -f "posted/$D.json" ]; then echo "Already posted $D"; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # GitHub sometimes starts scheduled runs hours early/late: don't start more than 2h before 12 PM IST
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            early=$(( $(TZ=Asia/Kolkata date -d "today 12:00" +%s) - $(date +%s) ))
+            if [ "$early" -gt 7200 ]; then echo "Too early (GitHub started this run hours off); a later run will post"; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          fi
           if python -c "import yaml,sys; c=yaml.safe_load(open('content/calendar.yaml')); sys.exit(0 if any(str(e['date'])=='$D' for e in c) else 1)"; then
             echo "go=true" >> "$GITHUB_OUTPUT"
           else
@@ -147,7 +156,7 @@ jobs:
           echo "urls=$URL1,$URL2" >> "$GITHUB_OUTPUT"
 
       - name: Wait for the posting time (12 PM IST)
-        if: steps.gate.outputs.go == 'true' && github.event_name == 'schedule' && !inputs.dry_run
+        if: steps.gate.outputs.go == 'true' && (github.event_name == 'schedule' || inputs.wait_for_post_time) && !inputs.dry_run
         run: |
           at="12:00"
           target=$(TZ=Asia/Kolkata date -d "today $at" +%s)
